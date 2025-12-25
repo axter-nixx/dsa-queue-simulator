@@ -4,4 +4,5 @@ This program uses the fundamentals of queue and priority queue to develop a traf
 
 #Things that i used on building traffic_generator.> [!CAUTION]
 time.h header file and unistd.h 
-time for sleep() to assign the vehicles to arrive at a specific interval and unistd to generator the random number so that it can be used to assign the cars a random id(color) and lane
+time for sleep() to assign the vehicles to arrive at a specific interval 
+unistd to generator the random number so that it can be used to assign the cars a random id(color) and lane

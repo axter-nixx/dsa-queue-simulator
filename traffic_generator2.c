@@ -1,29 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <unistd.h>
-#endif
 
 #define FILENAME "vehicles.data"
-#define MAX_LINES 5000 ///Limits 5000 vehicles
+#define MAX_LINES 5000          // Keep only the last 5000 entries
 #define MAX_LINE_LENGTH 64
-#define TRIM_INTERVAL 1000
+#define TRIM_INTERVAL 1000      // Trim after every 1000 vehicles
 
-// Cross-platform millisecond sleep
-static void sleep_ms(int ms) {
-#ifdef _WIN32
-    Sleep((DWORD)ms);
-#else
-    usleep(ms * 1000);
-#endif
-}
-
-// Generate a random vehicle number
-static void GenerateVehicleNumber(char *buffer) {
+// ---------------- Vehicle Number Generator ----------------
+void generateVehicleNumber(char* buffer) {
     buffer[0] = 'A' + rand() % 26;
     buffer[1] = 'A' + rand() % 26;
     buffer[2] = '0' + rand() % 10;
@@ -35,24 +21,24 @@ static void GenerateVehicleNumber(char *buffer) {
     buffer[8] = '\0';
 }
 
-// Pick a road (A,B,C,D) and lane (0,1,2)
-static void PickRoadLane(char *road, int *lane) {
+// ---------------- Road & Lane Selector ----------------
+void pickRoadLane(char* road, int* lane) {
     const char roads[] = {'A', 'B', 'C', 'D'};
     *road = roads[rand() % 4];
-    *lane = rand() % 3;
+    *lane = rand() % 3;  // 0 = incoming, 1 = AL2 (priority), 2 = free left
 }
 
-// Keep only the last MAX_LINES entries in the file
-static void TrimFile(const char *filename) {
-    FILE *file = fopen(filename, "r");
+// ---------------- Trim File Function ----------------
+void trimFile(const char* filename) {
+    FILE* file = fopen(filename, "r");
     if (!file) return;
 
     char lines[MAX_LINES][MAX_LINE_LENGTH];
     int count = 0;
 
-    while (fgets(lines[count % MAX_LINES], MAX_LINE_LENGTH, file)) {
+    while (fgets(lines[count % MAX_LINES], MAX_LINE_LENGTH, file))
         count++;
-    }
+
     fclose(file);
 
     if (count <= MAX_LINES) return;
@@ -68,32 +54,39 @@ static void TrimFile(const char *filename) {
     fclose(file);
 }
 
-int main(void) {
-    FILE *file = fopen(FILENAME, "a");
+// ---------------- Main Generator ----------------
+int main() {
+    FILE* file = fopen(FILENAME, "a");
     if (!file) {
-        perror("Error opening vehicles.data");
+        perror("Error opening file");
         return 1;
     }
 
-    srand((unsigned int)time(NULL));
+    srand(time(NULL));
 
     int vehicleCount = 0;
 
+    printf("=== Traffic Generator Started ===\n");
+
     while (1) {
-        // Decide how many vehicles to emit this tick. Roughly:
-        // - 20% chance of a burst (5-12 vehicles)
-        // - otherwise 1-3 vehicles
-        int burstSize = 1 + rand() % 3;
-        if ((rand() % 100) < 20) burstSize = 5 + rand() % 8;
+        // Decide number of vehicles to generate this tick
+        int burstSize = 1 + rand() % 3;   // normal 1-3 vehicles
+        if (rand() % 100 < 20)            // 20% chance of burst
+            burstSize = 5 + rand() % 8;   // burst 5-12 vehicles
 
         for (int i = 0; i < burstSize; i++) {
             char plate[9];
             char road;
             int lane;
 
-            GenerateVehicleNumber(plate);
-            PickRoadLane(&road, &lane);
+            generateVehicleNumber(plate);
+            pickRoadLane(&road, &lane);
 
+            // Bias AL2 traffic (road A, lane 1)
+            if (road == 'A' && lane == 1 && (rand() % 100 < 30))
+                lane = 1; // ensure some congestion on AL2
+
+            // Write vehicle to file
             fprintf(file, "%s:%c:%d\n", plate, road, lane);
             fflush(file);
 
@@ -102,18 +95,19 @@ int main(void) {
             vehicleCount++;
             if (vehicleCount % TRIM_INTERVAL == 0) {
                 fclose(file);
-                TrimFile(FILENAME);
+                trimFile(FILENAME);
                 file = fopen(FILENAME, "a");
-                if (!file) return 0;
+                if (!file) return 1;
             }
         }
 
-        // Randomize delay so bursts sometimes pile up and trigger saturation in UI.
-        int delayMs = 150 + rand() % 550;      // 150-700ms typical gap
-        if ((rand() % 100) < 10) delayMs = 30; // occasional near-immediate follow-up
-        sleep_ms(delayMs);
+        // Random delay between vehicle batches
+        int delayMs = 150 + rand() % 550;  // 150-700ms
+        if (rand() % 100 < 10) delayMs = 30; // occasional near-immediate
+        usleep(delayMs * 1000); // convert ms -> us
     }
 
     fclose(file);
     return 0;
 }
+

@@ -1,8 +1,6 @@
 # dsa-queue-simulator
-This program uses the fundamentals of queue and priority queue to develop a traffic management system where a traffic junction connects two major roads, forming a central point where vehicles must choose one of three alternative paths to continue
+This program simulates a traffic management system on the center of a traffic junction of 2 major roads, where it uses the fundamentals of queue and priority queue to manage traffic more time efficiently and it uses SDL2 as a graphical representation of the traffic management. The simulator visualizes the traffic flow where as the generator generates the traffic and stores the data into a file and that file is accessed by the simulator and thats how this 2 files constantly interact. Communication are handled via files, interprocess communication and sockets
 
+Procedure to run this program (in linux)
+In terminal paste this
 
-#Things that i used on building traffic_generator.> [!CAUTION]
-time.h header file and unistd.h 
-time for sleep() to assign the vehicles to arrive at a specific interval 
-unistd to generator the random number so that it can be used to assign the cars a random id(color) and lane

@@ -60,6 +60,7 @@ Queue* createQueue() {
     q->size = 0;
     return q;
 }
+
 int enqueue(Queue* q, Vehicle* v) {
     if (!q || !v) return -1;
     
@@ -73,6 +74,7 @@ int enqueue(Queue* q, Vehicle* v) {
     q->size++;
     return 0;
 }
+
 Vehicle* dequeue(Queue* q) {
     if (!q || q->size == 0) {
         return NULL;
@@ -105,7 +107,81 @@ void freeQueue(Queue* q) {
     free(q);
 }
 
+PriorityQueue* createPriorityQueue() {
+    PriorityQueue* pq = (PriorityQueue*)malloc(sizeof(PriorityQueue));
+    if (!pq) {
+        printf("Error: Failed to allocate memory for priority queue\n");
+        return NULL;
+    }
+    
+    pq->size = 4;
+    
+    // Initialize all lanes with normal priority
+    for (int i = 0; i < 4; i++) {
+        pq->lanes[i].laneId = i;
+        pq->lanes[i].priority = 0;  // Normal priority
+        pq->lanes[i].vehicleCount = 0;
+    }
+    
+    return pq;
+}
 
+// Update priority based on vehicle count
+void updatePriority(PriorityQueue* pq, int laneId, int count) {
+    if (!pq || laneId < 0 || laneId >= 4) return;
+    
+    pq->lanes[laneId].vehicleCount = count;
+    
+    // Special logic for AL2 (lane 0) - priority lane
+    if (laneId == 0) {
+        if (count > 10) {
+            pq->lanes[0].priority = 100;  // High priority
+            printf(">>> PRIORITY MODE ACTIVATED: AL2 has %d vehicles\n", count);
+        } else if (count < 5) {
+            pq->lanes[0].priority = 0;    // Back to normal
+            if (pq->lanes[0].priority == 100) {
+                printf(">>> PRIORITY MODE DEACTIVATED: AL2 has %d vehicles\n", count);
+            }
+        }
+        // Between 5 and 10, maintain current priority
+    } else {
+        // Other lanes always have normal priority
+        pq->lanes[laneId].priority = 0;
+    }
+}
+
+// Get the next lane to serve based on priority
+int getNextLane(PriorityQueue* pq) {
+    if (!pq) return 0;
+    
+    int maxPriority = -1;
+    int selectedLane = -1;
+    
+    // Find lane with highest priority that has vehicles waiting
+    for (int i = 0; i < 4; i++) {
+        if (pq->lanes[i].vehicleCount > 0 && pq->lanes[i].priority > maxPriority) {
+            maxPriority = pq->lanes[i].priority;
+            selectedLane = i;
+        }
+    }
+    
+    // If no priority lane, use round-robin on lanes with vehicles
+    if (selectedLane == -1) {
+        for (int i = 0; i < 4; i++) {
+            if (pq->lanes[i].vehicleCount > 0) {
+                selectedLane = i;
+                break;
+            }
+        }
+    }
+    
+    return selectedLane;
+}
+
+// Free priority queue
+void freePriorityQueue(PriorityQueue* pq) {
+    if (pq) free(pq);
+}
 
 // Function declarations
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);

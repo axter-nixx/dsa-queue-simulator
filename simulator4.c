@@ -178,12 +178,20 @@ int getNextLane(PriorityQueue* pq) {
     return selectedLane;
 }
 
-// Free priority queue
+Queue* queueA = NULL;
+Queue* queueB = NULL;
+Queue* queueC = NULL;
+Queue* queueD = NULL;
+
+PriorityQueue* lanePriorityQueue = NULL;
+
+pthread_mutex_t queueMutex;
+
+
 void freePriorityQueue(PriorityQueue* pq) {
     if (pq) free(pq);
 }
 
-// Function declarations
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
@@ -197,48 +205,105 @@ void printMessageHelper(const char* message, int count) {
     for (int i = 0; i < count; i++) printf("%s\n", message);
 }
 
+
 int main() {
     pthread_t tQueue, tReadFile;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;    
     SDL_Event event;    
 
+    // Initialize SDL
     if (!initializeSDL(&window, &renderer)) {
         return -1;
     }
-    SDL_mutex* mutex = SDL_CreateMutex();
-    SharedData sharedData = { 0, 0 }; // 0 => all red
     
+    // Initialize mutex
+    pthread_mutex_init(&queueMutex, NULL);
+    
+    // Initialize queues
+    queueA = createQueue();
+    queueB = createQueue();
+    queueC = createQueue();
+    queueD = createQueue();
+    lanePriorityQueue = createPriorityQueue();
+    
+    if (!queueA || !queueB || !queueC || !queueD || !lanePriorityQueue) {
+        printf("Error: Failed to create queues\n");
+        return -1;
+    }
+    
+    printf("=== Traffic Junction Simulator Started ===\n");
+    printf("Waiting for vehicles from traffic generator...\n\n");
+    
+    // Shared data for light control
+    SharedData sharedData = { 0, 0, false }; // Start with all lights red
+    
+    // Load font
     TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
-    if (!font) SDL_Log("Failed to load font: %s", TTF_GetError());
+    if (!font) {
+        printf("Warning: Failed to load font: %s\n", TTF_GetError());
+    }
 
+    // Initial render
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
     drawRoadsAndLane(renderer, font);
-    // drawLightForB(renderer, false);
     SDL_RenderPresent(renderer);
 
-    // we need to create seprate long running thread for the queue processing and light
-    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
-    pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
+    // Create worker threads
+    pthread_create(&tQueue, NULL, checkQueue, &sharedData);
     pthread_create(&tReadFile, NULL, readAndParseFile, NULL);
-    // readAndParseFile();
 
-    // Continue the UI thread
+    // Main UI thread - rendering loop
     bool running = true;
     while (running) {
-        // update light
+        // Clear and redraw
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderClear(renderer);
+        
+        // Draw all elements
+        drawRoadsAndLane(renderer, font);
         refreshLight(renderer, &sharedData);
-        while (SDL_PollEvent(&event))
-            if (event.type == SDL_QUIT) running = false;
+        drawQueueInfo(renderer, font);
+        
+        // Update display
+        SDL_RenderPresent(renderer);
+        
+        // Handle events
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+                sharedData.stopSimulation = true;
+            }
+        }
+        
+        SDL_Delay(100); // ~10 FPS for UI updates
     }
-    SDL_DestroyMutex(mutex);
+    
+    // Cleanup
+    printf("\nShutting down simulator...\n");
+    sharedData.stopSimulation = true;
+    
+    pthread_mutex_destroy(&queueMutex);
+    
+    freeQueue(queueA);
+    freeQueue(queueB);
+    freeQueue(queueC);
+    freeQueue(queueD);
+    freePriorityQueue(lanePriorityQueue);
+    
+    if (font) TTF_CloseFont(font);
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
-    // pthread_kil
+    
+    TTF_Quit();
     SDL_Quit();
+    
+    printf("Simulator stopped.\n");
     return 0;
 }
+
+//graphics realted 
 
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -315,8 +380,54 @@ void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, 
     }
 }
 
+void drawLightForRoad(SDL_Renderer* renderer, int road, bool isGreen) {
+    int boxX, boxY;
+    
+    // Position lights based on road
+    switch(road) {
+        case 0: // Road A (top)
+            boxX = 400;
+            boxY = 280;
+            break;
+        case 1: // Road B (bottom)
+            boxX = 350;
+            boxY = 490;
+            break;
+        case 2: // Road C (right)
+            boxX = 490;
+            boxY = 375;
+            break;
+        case 3: // Road D (left)
+            boxX = 260;
+            boxY = 425;
+            break;
+        default:
+            return;
+    }
+    
+    // Draw light box
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+    SDL_Rect lightBox = {boxX, boxY, 50, 30};
+    SDL_RenderFillRect(renderer, &lightBox);
+    
+    // Draw light color
+    if (isGreen) {
+        SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255); // Green
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red
+    }
+    
+    SDL_Rect light = {boxX + 5, boxY + 5, 20, 20};
+    SDL_RenderFillRect(renderer, &light);
+    
+    // Draw arrow indicator
+    if (isGreen) {
+        drawArrow(renderer, boxX + 35, boxY + 5, boxX + 35, boxY + 25, boxX + 45, boxY + 15);
+    }
+}
 
-void drawLightForB(SDL_Renderer* renderer, bool isRed){
+
+/*void drawLightForB(SDL_Renderer* renderer, bool isRed){
     // draw light box
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
     SDL_Rect lightBox = {400, 300, 50, 30};
@@ -327,7 +438,7 @@ void drawLightForB(SDL_Renderer* renderer, bool isRed){
     SDL_Rect straight_Light = {405, 305, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
     drawArrwow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
-}
+}*/
 
 
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {

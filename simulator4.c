@@ -565,16 +565,116 @@ void refreshLight(SDL_Renderer *renderer, SharedData* sharedData) {
     
     sharedData->currentLight = sharedData->nextLight;
 }
-
-void* chequeQueue(void* arg){
+//edited part
+void* checkQueue(void* arg) {
     SharedData* sharedData = (SharedData*)arg;
-    int i = 1;
-    while (1) {
+    int currentServing = 0; // Round robin counter
+    
+    printf("Traffic processing thread started\n");
+    
+    while (!sharedData->stopSimulation) {
+        pthread_mutex_lock(&queueMutex);
+        
+        // Update priority queue with current counts
+        updatePriority(lanePriorityQueue, 0, getSize(queueA));
+        updatePriority(lanePriorityQueue, 1, getSize(queueB));
+        updatePriority(lanePriorityQueue, 2, getSize(queueC));
+        updatePriority(lanePriorityQueue, 3, getSize(queueD));
+        
+        int countA = getSize(queueA);
+        int countB = getSize(queueB);
+        int countC = getSize(queueC);
+        int countD = getSize(queueD);
+        int totalVehicles = countA + countB + countC + countD;
+        
+        pthread_mutex_unlock(&queueMutex);
+        
+        // If no vehicles, turn all lights red
+        if (totalVehicles == 0) {
+            sharedData->nextLight = 0; // All red
+            sleep(2);
+            continue;
+        }
+        
+        // Check if priority lane (AL2) needs immediate service
+        if (countA > 10) {
+            printf("\n>>> PRIORITY MODE: Serving Road A (AL2) - %d vehicles waiting\n", countA);
+            
+            // Calculate vehicles to serve
+            int vehiclesToServe = (countA > 5) ? (countA - 4) : 1;
+            
+            // Set green light for road A
+            sharedData->nextLight = 1;
+            sleep(2); // Light transition time
+            
+            // Serve vehicles from Road A
+            pthread_mutex_lock(&queueMutex);
+            for (int i = 0; i < vehiclesToServe && !isEmpty(queueA); i++) {
+                Vehicle* v = dequeue(queueA);
+                if (v) {
+                    printf("  ✓ Served: %s from Road A (Priority)\n", v->vehicleNumber);
+                    free(v);
+                }
+            }
+            pthread_mutex_unlock(&queueMutex);
+            
+            sleep(3); // Green light duration
+            continue;
+        }
+        
+        // Normal mode - fair distribution
+        printf("\n--- Normal Mode: Fair Distribution ---\n");
+        
+        // Calculate average vehicles to serve per lane
+        int avgVehicles = (totalVehicles / 4) + 1;
+        if (avgVehicles < 1) avgVehicles = 1;
+        
+        Queue* queues[] = {queueA, queueB, queueC, queueD};
+        char roadNames[] = {'A', 'B', 'C', 'D'};
+        
+        // Serve each lane in round-robin fashion
+        for (int i = 0; i < 4; i++) {
+            int laneIndex = (currentServing + i) % 4;
+            
+            pthread_mutex_lock(&queueMutex);
+            int queueSize = getSize(queues[laneIndex]);
+            pthread_mutex_unlock(&queueMutex);
+            
+            if (queueSize > 0) {
+                printf("Serving Road %c (%d vehicles waiting):\n", roadNames[laneIndex], queueSize);
+                
+                // Set green light
+                sharedData->nextLight = laneIndex + 1;
+                sleep(2); // Light transition
+                
+                // Serve vehicles
+                int served = 0;
+                pthread_mutex_lock(&queueMutex);
+                for (int j = 0; j < avgVehicles && !isEmpty(queues[laneIndex]); j++) {
+                    Vehicle* v = dequeue(queues[laneIndex]);
+                    if (v) {
+                        printf("  ✓ Served: %s from Road %c\n", v->vehicleNumber, roadNames[laneIndex]);
+                        free(v);
+                        served++;
+                    }
+                }
+                pthread_mutex_unlock(&queueMutex);
+                
+                printf("  Total served from Road %c: %d\n", roadNames[laneIndex], served);
+                
+                sleep(3); // Green light duration
+                currentServing = (laneIndex + 1) % 4;
+                break; // Serve one lane per cycle
+            }
+        }
+        
+        // All lights red between cycles
         sharedData->nextLight = 0;
-        sleep(5);
-        sharedData->nextLight = 2;
-        sleep(5);
+        sleep(1);
     }
+    
+    printf("Traffic processing thread stopped\n");
+    return NULL;
 }
 
 // you may need to pass the queue on this function for sharing the data

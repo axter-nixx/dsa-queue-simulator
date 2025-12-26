@@ -342,7 +342,7 @@ bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer) {
     return true;
 }
 
-
+//graphics of the roads and lanes
 void swap(int *a, int *b) {
     int temp = *a;
     *a = *b;
@@ -442,76 +442,129 @@ void drawLightForRoad(SDL_Renderer* renderer, int road, bool isGreen) {
 
 
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
-    SDL_SetRenderDrawColor(renderer, 211,211,211,255);
-    // Vertical road
+    // Draw gray roads
+    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
     
+    // Vertical road
     SDL_Rect verticalRoad = {WINDOW_WIDTH / 2 - ROAD_WIDTH / 2, 0, ROAD_WIDTH, WINDOW_HEIGHT};
     SDL_RenderFillRect(renderer, &verticalRoad);
 
     // Horizontal road
     SDL_Rect horizontalRoad = {0, WINDOW_HEIGHT / 2 - ROAD_WIDTH / 2, WINDOW_WIDTH, ROAD_WIDTH};
     SDL_RenderFillRect(renderer, &horizontalRoad);
-    // draw horizontal lanes
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    for(int i=0; i<=3; i++){
+    
+    // Draw lane dividers
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    for (int i = 0; i <= 3; i++) {
         // Horizontal lanes
         SDL_RenderDrawLine(renderer, 
-            0, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,  // x1,y1
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i // x2, y2
+            0, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
+            WINDOW_WIDTH/2 - ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i
         );
         SDL_RenderDrawLine(renderer, 
-            800, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
+            WINDOW_WIDTH, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
             WINDOW_WIDTH/2 + ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i
         );
+        
         // Vertical lanes
         SDL_RenderDrawLine(renderer,
             WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, 0,
             WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT/2 - ROAD_WIDTH/2
         );
         SDL_RenderDrawLine(renderer,
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, 800,
+            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT,
             WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT/2 + ROAD_WIDTH/2
         );
     }
-    displayText(renderer, font, "A",400, 10);
-    displayText(renderer, font, "B",400,770);
-    displayText(renderer, font, "D",10,400);
-    displayText(renderer, font, "C",770,400);
     
+    // Draw road labels
+    if (font) {
+        displayText(renderer, font, "A (Priority)", 350, 30);
+        displayText(renderer, font, "B", 380, 740);
+        displayText(renderer, font, "C", 720, 380);
+        displayText(renderer, font, "D", 30, 380);
+    }
 }
 
 
-void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y){
-    // display necessary text
-    SDL_Color textColor = {0, 0, 0, 255}; // black color
+void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y) {
+    if (!font) return;
+    
+    SDL_Color textColor = {0, 0, 0, 255};
     SDL_Surface *textSurface = TTF_RenderText_Solid(font, text, textColor);
+    if (!textSurface) return;
+    
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    SDL_Rect textRect = {x,y,0,0 };
+    
+    if (!texture) return;
+    
+    SDL_Rect textRect = {x, y, 0, 0};
     SDL_QueryTexture(texture, NULL, NULL, &textRect.w, &textRect.h);
-    SDL_Log("DIM of SDL_Rect %d %d %d %d", textRect.x, textRect.y, textRect.h, textRect.w);
-    // SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    // SDL_Log("TTF_Error: %s\n", TTF_GetError());
     SDL_RenderCopy(renderer, texture, NULL, &textRect);
-    // SDL_Log("TTF_Error: %s\n", TTF_GetError());
+    SDL_DestroyTexture(texture);
 }
 
-
-void refreshLight(SDL_Renderer *renderer, SharedData* sharedData){
-    if(sharedData->nextLight == sharedData->currentLight) return; // early return
-
-    if(sharedData->nextLight == 0){ // trun off all lights
-        drawLightForB(renderer, false);
+//edited part
+void drawQueueInfo(SDL_Renderer *renderer, TTF_Font *font) {
+    if (!font) return;
+    
+    char buffer[100];
+    
+    pthread_mutex_lock(&queueMutex);
+    
+    int countA = getSize(queueA);
+    int countB = getSize(queueB);
+    int countC = getSize(queueC);
+    int countD = getSize(queueD);
+    
+    pthread_mutex_unlock(&queueMutex);
+    
+    // Draw semi-transparent background for info panel
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 240, 240, 240, 200);
+    SDL_Rect infoPanel = {10, 10, 180, 140};
+    SDL_RenderFillRect(renderer, &infoPanel);
+    
+    // Draw border
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(renderer, &infoPanel);
+    
+    // Display queue counts
+    snprintf(buffer, sizeof(buffer), "Road A: %d", countA);
+    displayText(renderer, font, buffer, 20, 20);
+    
+    snprintf(buffer, sizeof(buffer), "Road B: %d", countB);
+    displayText(renderer, font, buffer, 20, 50);
+    
+    snprintf(buffer, sizeof(buffer), "Road C: %d", countC);
+    displayText(renderer, font, buffer, 20, 80);
+    
+    snprintf(buffer, sizeof(buffer), "Road D: %d", countD);
+    displayText(renderer, font, buffer, 20, 110);
+    
+    // Show priority status
+    if (countA > 10) {
+        SDL_SetRenderDrawColor(renderer, 255, 200, 200, 200);
+        SDL_Rect priorityIndicator = {10, 160, 180, 30};
+        SDL_RenderFillRect(renderer, &priorityIndicator);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderDrawRect(renderer, &priorityIndicator);
+        displayText(renderer, font, "PRIORITY MODE", 20, 165);
     }
-    if(sharedData->nextLight == 2) drawLightForB(renderer, true);
-    else drawLightForB(renderer, false);
-    SDL_RenderPresent(renderer);
-    printf("Light of queue updated from %d to %d\n", sharedData->currentLight,  sharedData->nextLight);
-    // update the light
-    sharedData->currentLight = sharedData->nextLight;
-    fflush(stdout);
 }
 
+void refreshLight(SDL_Renderer *renderer, SharedData* sharedData) {
+    if (sharedData->nextLight == sharedData->currentLight) return;
+    
+    // Draw lights for all roads
+    for (int i = 0; i < 4; i++) {
+        bool isGreen = (sharedData->nextLight == i + 1);
+        drawLightForRoad(renderer, i, isGreen);
+    }
+    
+    sharedData->currentLight = sharedData->nextLight;
+}
 
 void* chequeQueue(void* arg){
     SharedData* sharedData = (SharedData*)arg;

@@ -49,6 +49,63 @@ typedef struct{
     int nextLight;
 } SharedData;
 
+Queue* createQueue() {
+    Queue* q = (Queue*)malloc(sizeof(Queue));
+    if (!q) {
+        printf("Error: Failed to allocate memory for queue\n");
+        return NULL;
+    }
+    q->front = 0;
+    q->rear = -1;
+    q->size = 0;
+    return q;
+}
+int enqueue(Queue* q, Vehicle* v) {
+    if (!q || !v) return -1;
+    
+    if (q->size >= MAX_QUEUE_SIZE) {
+        printf("Warning: Queue is full, cannot add vehicle %s\n", v->vehicleNumber);
+        return -1;
+    }
+    
+    q->rear = (q->rear + 1) % MAX_QUEUE_SIZE;
+    q->items[q->rear] = v;
+    q->size++;
+    return 0;
+}
+Vehicle* dequeue(Queue* q) {
+    if (!q || q->size == 0) {
+        return NULL;
+    }
+    
+    Vehicle* v = q->items[q->front];
+    q->front = (q->front + 1) % MAX_QUEUE_SIZE;
+    q->size--;
+    return v;
+}
+int isEmpty(Queue* q) {
+    return (q == NULL || q->size == 0);
+}
+
+// Get queue size
+int getSize(Queue* q) {
+    return (q == NULL) ? 0 : q->size;
+}
+Vehicle* peek(Queue* q) {
+    if (isEmpty(q)) return NULL;
+    return q->items[q->front];
+}
+void freeQueue(Queue* q) {
+    if (!q) return;
+    
+    while (!isEmpty(q)) {
+        Vehicle* v = dequeue(q);
+        free(v);
+    }
+    free(q);
+}
+
+
 
 // Function declarations
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);

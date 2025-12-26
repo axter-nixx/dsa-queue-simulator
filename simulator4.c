@@ -677,28 +677,89 @@ void* checkQueue(void* arg) {
     return NULL;
 }
 
-// you may need to pass the queue on this function for sharing the data
+//file reading (edited part)
 void* readAndParseFile(void* arg) {
-    while(1){ 
+    printf("File reading thread started\n");
+    printf("Monitoring file: %s\n", VEHICLE_FILE);
+    
+    long lastFileSize = 0;
+    
+    while (1) {
+        // Check if file exists and has new data
         FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
-            perror("Error opening file");
+            sleep(1);
             continue;
         }
-
-        char line[MAX_LINE_LENGTH];
-        while (fgets(line, sizeof(line), file)) {
-            // Remove newline if present
-            line[strcspn(line, "\n")] = 0;
-
-            // Split using ':'
-            char* vehicleNumber = strtok(line, ":");
-            char* road = strtok(NULL, ":"); // read next item resulted from split
-
-            if (vehicleNumber && road)  printf("Vehicle: %s, Raod: %s\n", vehicleNumber, road);
-            else printf("Invalid format: %s\n", line);
+        
+        // Get file size
+        fseek(file, 0, SEEK_END);
+        long fileSize = ftell(file);
+        fseek(file, 0, SEEK_SET);
+        
+        // If file has new data, read from last position
+        if (fileSize > lastFileSize) {
+            fseek(file, lastFileSize, SEEK_SET);
+            
+            char line[MAX_LINE_LENGTH];
+            while (fgets(line, sizeof(line), file)) {
+                // Remove newline
+                line[strcspn(line, "\n")] = 0;
+                
+                if (strlen(line) == 0) continue;
+                
+                // Parse: "AA0BB123:A"
+                char* vehicleNumber = strtok(line, ":");
+                char* roadStr = strtok(NULL, ":");
+                
+                if (vehicleNumber && roadStr) {
+                    // Create new vehicle
+                    Vehicle* v = (Vehicle*)malloc(sizeof(Vehicle));
+                    if (v) {
+                        strncpy(v->vehicleNumber, vehicleNumber, 9);
+                        v->vehicleNumber[9] = '\0';
+                        v->road = roadStr[0];
+                        v->arrivalTime = time(NULL);
+                        
+                        // Add to appropriate queue
+                        pthread_mutex_lock(&queueMutex);
+                        int result = -1;
+                        switch(v->road) {
+                            case 'A':
+                                result = enqueue(queueA, v);
+                                break;
+                            case 'B':
+                                result = enqueue(queueB, v);
+                                break;
+                            case 'C':
+                                result = enqueue(queueC, v);
+                                break;
+                            case 'D':
+                                result = enqueue(queueD, v);
+                                break;
+                            default:
+                                printf("Warning: Unknown road '%c' for vehicle %s\n", v->road, v->vehicleNumber);
+                                free(v);
+                                v = NULL;
+                        }
+                        pthread_mutex_unlock(&queueMutex);
+                        
+                        if (result == 0 && v) {
+                            printf("+ Vehicle %s added to Road %c queue\n", v->vehicleNumber, v->road);
+                        } else if (v) {
+                            free(v);
+                        }
+                    }
+                }
+            }
+            
+            lastFileSize = fileSize;
         }
+        
         fclose(file);
-        sleep(2); // manage this time
+        sleep(1); // Check file every second
     }
+    
+    return NULL;
 }
+

@@ -24,12 +24,10 @@ This will create two executables: `simulator` and `traffic_generator`.
 ### 3. Run the Simulation
 We need to run two programs that is simulator and traffic_generator so open two terminals and enter the following command:
 
-**Method A (Two terminals):**
-Terminal 1:
+**In terminal:**
 ```bash
 ./traffic_generator
-```
-Terminal 2:
+```&
 ```bash
 ./simulator
 ```

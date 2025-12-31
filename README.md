@@ -42,11 +42,13 @@ Lets install **MSYS2** to compile our c file.
 
 ### 1. Install MSYS2
 Very simple step enter the following command in your windows terminal :
-`winget install msys2`
+```bash
+winget install msys2
+```
 ### 2. Install Dependencies
 In the MSYS2 UCRT64 terminal, run:
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-sdl2 mingw-w64-ucrt-x86_64-sdl2_ttf
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-sdl2 mingw-w64-ucrt-x86_64-sdl2_tt8f
 ```
 
 ### 3. Setup Font file

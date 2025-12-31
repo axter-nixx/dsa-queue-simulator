@@ -54,26 +54,25 @@ void clearVehicleFile() {
     }
 }
 
-
-
 int main(int argc, char* argv[]) {
+    // Initialize random seed FIRST, before any random operations
+    srand(time(NULL));
+    
+    // Determine mode early
+    char mode[20] = "normal";
+    if (argc > 1) {
+        strncpy(mode, argv[1], sizeof(mode) - 1);
+        mode[sizeof(mode) - 1] = '\0'; // Ensure null termination
+    }
+    
+    // Clear existing data BEFORE opening file in append mode
+    clearVehicleFile();
+    
+    // Now open file in append mode
     FILE* file = fopen(FILENAME, "a");
     if (!file) {
         perror("Error opening file");
         return 1;
-    }
-
-    srand(time(NULL)); // Initialize random seed
-    
-    // Clear existing data
-    fclose(file);
-    clearVehicleFile();
-    file = fopen(FILENAME, "a");
-    
-    // Determine mode
-    char mode[20] = "normal";
-    if (argc > 1) {
-        strncpy(mode, argv[1], sizeof(mode) - 1);
     }
     
     printf("\n=== Traffic Generator Started ===\n");
@@ -152,10 +151,16 @@ int main(int argc, char* argv[]) {
         int interval, priorityWeight;
         
         printf("Enter generation interval (seconds): ");
-        scanf("%d", &interval);
+        if (scanf("%d", &interval) != 1 || interval < 0) {
+            printf("Invalid interval. Using default: 2 seconds\n");
+            interval = 2;
+        }
         
         printf("Enter Road A priority weight (0-100, 25=equal, 60=high priority): ");
-        scanf("%d", &priorityWeight);
+        if (scanf("%d", &priorityWeight) != 1) {
+            printf("Invalid weight. Using default: 25\n");
+            priorityWeight = 25;
+        }
         
         if (priorityWeight < 0) priorityWeight = 0;
         if (priorityWeight > 100) priorityWeight = 100;
@@ -179,7 +184,8 @@ int main(int argc, char* argv[]) {
     }
     
     else {
-        printf("Unknown mode: %s\n\n", mode);
+        printf("Unknown mode: %s\n", mode);
+        printf("Valid modes: normal, priority, burst, custom\n\n");
         fclose(file);
         return 1;
     }

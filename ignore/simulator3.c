@@ -5,8 +5,10 @@
 #include <unistd.h> 
 #include <stdio.h> 
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
 
-#define MAX_LINE_LENGTH 20
+#define MAX_LINE_LENGTH 100
 #define MAIN_FONT "/usr/share/fonts/TTF/DejaVuSans.ttf"
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
@@ -14,17 +16,22 @@
 #define ROAD_WIDTH 150
 #define LANE_WIDTH 50
 #define ARROW_SIZE 15
-
+#define MAX_QUEUE_SIZE 100
 
 const char* VEHICLE_FILE = "vehicles.data";
 
+// ============================================================================
+// DATA STRUCTURES - Queue Implementation
+// ============================================================================
+
+// Vehicle structure
 typedef struct {
     char vehicleNumber[10];
-    char road;  
+    char road;  // A, B, C, or D
     time_t arrivalTime;
 } Vehicle;
 
-
+// Queue structure for vehicles
 typedef struct {
     Vehicle* items[MAX_QUEUE_SIZE];
     int front;
@@ -32,23 +39,31 @@ typedef struct {
     int size;
 } Queue;
 
-
+// Lane information for priority queue
 typedef struct {
-    int laneId;
-    int priority;
+    int laneId;      // 0=A, 1=B, 2=C, 3=D
+    int priority;    // Higher number = higher priority
     int vehicleCount;
 } LaneInfo;
 
+// Priority Queue for managing lane priorities
 typedef struct {
     LaneInfo lanes[4];
     int size;
 } PriorityQueue;
 
-typedef struct{
-    int currentLight;
+// Shared data between threads
+typedef struct {
+    int currentLight;  // 0=all red, 1=A green, 2=B green, 3=C green, 4=D green
     int nextLight;
+    bool stopSimulation;
 } SharedData;
 
+// ============================================================================
+// QUEUE FUNCTIONS - Implementation
+// ============================================================================
+
+// Create a new queue
 Queue* createQueue() {
     Queue* q = (Queue*)malloc(sizeof(Queue));
     if (!q) {
@@ -61,6 +76,7 @@ Queue* createQueue() {
     return q;
 }
 
+// Add element to queue (Enqueue)
 int enqueue(Queue* q, Vehicle* v) {
     if (!q || !v) return -1;
     
@@ -75,6 +91,7 @@ int enqueue(Queue* q, Vehicle* v) {
     return 0;
 }
 
+// Remove element from queue (Dequeue)
 Vehicle* dequeue(Queue* q) {
     if (!q || q->size == 0) {
         return NULL;
@@ -85,6 +102,8 @@ Vehicle* dequeue(Queue* q) {
     q->size--;
     return v;
 }
+
+// Check if queue is empty
 int isEmpty(Queue* q) {
     return (q == NULL || q->size == 0);
 }
@@ -93,10 +112,14 @@ int isEmpty(Queue* q) {
 int getSize(Queue* q) {
     return (q == NULL) ? 0 : q->size;
 }
+
+// Peek at front element without removing
 Vehicle* peek(Queue* q) {
     if (isEmpty(q)) return NULL;
     return q->items[q->front];
 }
+
+// Free queue and all its vehicles
 void freeQueue(Queue* q) {
     if (!q) return;
     
@@ -107,6 +130,11 @@ void freeQueue(Queue* q) {
     free(q);
 }
 
+// ============================================================================
+// PRIORITY QUEUE FUNCTIONS - Implementation
+// ============================================================================
+
+// Create priority queue for lanes
 PriorityQueue* createPriorityQueue() {
     PriorityQueue* pq = (PriorityQueue*)malloc(sizeof(PriorityQueue));
     if (!pq) {
@@ -178,33 +206,45 @@ int getNextLane(PriorityQueue* pq) {
     return selectedLane;
 }
 
+// Free priority queue
+void freePriorityQueue(PriorityQueue* pq) {
+    if (pq) free(pq);
+}
+
+// ============================================================================
+// GLOBAL VARIABLES
+// ============================================================================
+
+// Vehicle queues for each road
 Queue* queueA = NULL;
 Queue* queueB = NULL;
 Queue* queueC = NULL;
 Queue* queueD = NULL;
 
+// Priority queue for lane management
 PriorityQueue* lanePriorityQueue = NULL;
 
+// Thread synchronization
 pthread_mutex_t queueMutex;
 
-
-void freePriorityQueue(PriorityQueue* pq) {
-    if (pq) free(pq);
-}
+// ============================================================================
+// SDL GRAPHICS FUNCTIONS
+// ============================================================================
 
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
-void drawLightForB(SDL_Renderer* renderer, bool isRed);
+void drawLightForRoad(SDL_Renderer* renderer, int road, bool isGreen);
+void drawQueueInfo(SDL_Renderer *renderer, TTF_Font *font);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
-void* chequeQueue(void* arg);
+void* checkQueue(void* arg);
 void* readAndParseFile(void* arg);
+void swap(int *a, int *b);
+void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3);
 
-
-void printMessageHelper(const char* message, int count) {
-    for (int i = 0; i < count; i++) printf("%s\n", message);
-}
-
+// ============================================================================
+// MAIN FUNCTION
+// ============================================================================
 
 int main() {
     pthread_t tQueue, tReadFile;
@@ -303,21 +343,22 @@ int main() {
     return 0;
 }
 
-//graphics realted 
+// ============================================================================
+// SDL INITIALIZATION
+// ============================================================================
 
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
         return false;
     }
-    // font init
+    
     if (TTF_Init() < 0) {
         SDL_Log("SDL_ttf could not initialize! TTF_Error: %s\n", TTF_GetError());
         return false;
     }
 
-
-    *window = SDL_CreateWindow("Junction Diagram",
+    *window = SDL_CreateWindow("Traffic Junction Simulator",
                                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                WINDOW_WIDTH*SCALE, WINDOW_HEIGHT*SCALE,
                                SDL_WINDOW_SHOWN);
@@ -328,7 +369,6 @@ bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer) {
     }
 
     *renderer = SDL_CreateRenderer(*window, -1, SDL_RENDERER_ACCELERATED);
-    // if you have high resolution monitor 2K or 4K then scale
     SDL_RenderSetScale(*renderer, SCALE, SCALE);
 
     if (!*renderer) {
@@ -342,16 +382,18 @@ bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer) {
     return true;
 }
 
-//graphics of the roads and lanes
+// ============================================================================
+// GRAPHICS DRAWING FUNCTIONS
+// ============================================================================
+
 void swap(int *a, int *b) {
     int temp = *a;
     *a = *b;
     *b = temp;
 }
 
-
-void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3) {
-    // Sort vertices by ascending Y (bubble sort approach)
+void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3) {
+    // Sort vertices by ascending Y
     if (y1 > y2) { swap(&y1, &y2); swap(&x1, &x2); }
     if (y1 > y3) { swap(&y1, &y3); swap(&x1, &x3); }
     if (y2 > y3) { swap(&y2, &y3); swap(&x2, &x3); }
@@ -363,7 +405,7 @@ void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, 
 
     float sx1 = x1, sx2 = x1;
 
-    // Fill first part (top to middle)
+    // Fill first part
     for (int y = y1; y < y2; y++) {
         SDL_RenderDrawLine(renderer, (int)sx1, y, (int)sx2, y);
         sx1 += dx1;
@@ -372,7 +414,7 @@ void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, 
 
     sx1 = x2;
 
-    // Fill second part (middle to bottom)
+    // Fill second part
     for (int y = y2; y <= y3; y++) {
         SDL_RenderDrawLine(renderer, (int)sx1, y, (int)sx2, y);
         sx1 += dx3;
@@ -426,21 +468,6 @@ void drawLightForRoad(SDL_Renderer* renderer, int road, bool isGreen) {
     }
 }
 
-
-/*void drawLightForB(SDL_Renderer* renderer, bool isRed){
-    // draw light box
-    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-    SDL_Rect lightBox = {400, 300, 50, 30};
-    SDL_RenderFillRect(renderer, &lightBox);
-    // draw light
-    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // red
-    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    // green
-    SDL_Rect straight_Light = {405, 305, 20, 20};
-    SDL_RenderFillRect(renderer, &straight_Light);
-    drawArrwow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
-}*/
-
-
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
     // Draw gray roads
     SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
@@ -486,7 +513,6 @@ void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
     }
 }
 
-
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y) {
     if (!font) return;
     
@@ -505,7 +531,6 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int 
     SDL_DestroyTexture(texture);
 }
 
-//edited part
 void drawQueueInfo(SDL_Renderer *renderer, TTF_Font *font) {
     if (!font) return;
     
@@ -565,7 +590,11 @@ void refreshLight(SDL_Renderer *renderer, SharedData* sharedData) {
     
     sharedData->currentLight = sharedData->nextLight;
 }
-//edited part
+
+// ============================================================================
+// TRAFFIC PROCESSING THREAD
+// ============================================================================
+
 void* checkQueue(void* arg) {
     SharedData* sharedData = (SharedData*)arg;
     int currentServing = 0; // Round robin counter
@@ -677,7 +706,10 @@ void* checkQueue(void* arg) {
     return NULL;
 }
 
-//file reading (edited part)
+// ============================================================================
+// FILE READING THREAD
+// ============================================================================
+
 void* readAndParseFile(void* arg) {
     printf("File reading thread started\n");
     printf("Monitoring file: %s\n", VEHICLE_FILE);
@@ -762,4 +794,3 @@ void* readAndParseFile(void* arg) {
     
     return NULL;
 }
-

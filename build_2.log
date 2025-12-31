@@ -1,0 +1,6 @@
+gcc -Wall -Wextra -g -o simulator simulator.c -lSDL2 -lSDL2_ttf -lpthread
+simulator.c: In function ‘readAndParseFile’:
+simulator.c:582:30: warning: unused parameter ‘arg’ [-Wunused-parameter]
+  582 | void* readAndParseFile(void* arg) {
+      |                        ~~~~~~^~~
+gcc -Wall -Wextra -g -o traffic_generator traffic_generator.c

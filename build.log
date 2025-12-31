@@ -1,0 +1,32 @@
+gcc -Wall -Wextra -g -o simulator simulator.c -lSDL2 -lSDL2_ttf -lpthread
+simulator.c: In function ‘drawRoadsAndLane’:
+simulator.c:380:9: error: implicit declaration of function ‘displayText’ [-Wimplicit-function-declaration]
+  380 |         displayText(renderer, font, "A (Priority)", 350, 30);
+      |         ^~~~~~~~~~~
+simulator.c: At top level:
+simulator.c:388:6: warning: conflicting types for ‘displayText’; have ‘void(SDL_Renderer *, TTF_Font *, char *, int,  int)’
+  388 | void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y) {
+      |      ^~~~~~~~~~~
+simulator.c:380:9: note: previous implicit declaration of ‘displayText’ with type ‘void(SDL_Renderer *, TTF_Font *, char *, int,  int)’
+  380 |         displayText(renderer, font, "A (Priority)", 350, 30);
+      |         ^~~~~~~~~~~
+simulator.c: In function ‘checkQueue’:
+simulator.c:473:23: error: ‘SharedData’ has no member named ‘stopSimulation’
+  473 |     while (!sharedData->stopSimulation) {
+      |                       ^~
+simulator.c: In function ‘readAndParseFile’:
+simulator.c:579:30: warning: unused parameter ‘arg’ [-Wunused-parameter]
+  579 | void* readAndParseFile(void* arg) {
+      |                        ~~~~~~^~~
+simulator.c: In function ‘main’:
+simulator.c:695:37: warning: excess elements in struct initializer
+  695 |     SharedData sharedData = { 0, 0, false }; // Start with all lights red
+      |                                     ^~~~~
+simulator.c:695:37: note: (near initialization for ‘sharedData’)
+simulator.c:732:27: error: ‘SharedData’ has no member named ‘stopSimulation’
+  732 |                 sharedData.stopSimulation = true;
+      |                           ^
+simulator.c:741:15: error: ‘SharedData’ has no member named ‘stopSimulation’
+  741 |     sharedData.stopSimulation = true;
+      |               ^
+make: *** [Makefile:8: simulator] Error 1

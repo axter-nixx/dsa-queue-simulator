@@ -26,9 +26,7 @@ We need to run two programs that is simulator and traffic_generator so open two 
 
 **In terminal:**
 ```bash
-./traffic_generator
-```&
-```bash
+./traffic_generator &
 ./simulator
 ```
 

@@ -41,7 +41,103 @@ The functions used in the program are categorized into 3 main parts.
 
 **getNextLane()** - Loads up the Next lane to serve
 
+# Traffic Junction Simulation - Algorithm Overview
 
+## Core Algorithms
+
+### 1. Vehicle Generation & File Communication
+
+Random vehicle IDs (format: `AA0AA000`) generate alongside lane assignments (A/B/C/D) at 1-second intervals. Data persists to `vehicles.data` as `VEHICLEID:LANE`. A reader thread monitors this file every 2 seconds, extracting entries into respective lane queues.
+
+> **Performance:** `O(1)` generation, `O(n)` parsing
+
+---
+
+### 2. Queue Operations
+
+Each lane maintains a **FIFO queue** supporting:
+- `Enqueue` - Insert at tail
+- `Dequeue` - Remove from head  
+- `GetSize` - Query count
+
+Four independent queues exist. Operations execute in `O(1)` time with `O(m)` total space.
+
+---
+
+### 3. Priority Detection
+
+`AL2` receives preferential treatment via threshold logic:
+```
+AL2 > 10  → activate priority
+AL2 ≥ 5   → maintain priority
+AL2 < 5   → revert to normal
+```
+
+Standard mode distributes service using: `⌈(BL2 + CL3 + DL4) / 3⌉`
+
+The **10/5 gap** prevents oscillation. 
+
+**Complexity:** `O(1)`
+
+---
+
+### 4. Traffic Light State Machine
+
+System operates in five states: `STATE_0` (all red) and `STATE_A/B/C/D` (single green).
+
+#### Priority Path:
+```
+A → green | serve AL2 until < 5 | duration = count × unit_time
+```
+
+#### Standard Path:
+```
+B → C → D rotation | serve average vehicles | fair distribution
+```
+
+Transitions include **1-second all-red safety buffer**. 
+
+**Complexity:** `O(v)`
+
+---
+
+### 5. Multi-threaded Architecture
+
+| Thread | Responsibility |
+|--------|---------------|
+| **Generator** | File writing |
+| **Reader** | File parsing → queue population |
+| **Processor** | Vehicle management → signal control |
+| **Graphics** | Visual rendering (30 FPS) |
+
+**Mutex locks** ensure thread-safe access to shared resources. 
+
+**Overhead:** `O(1)`
+
+---
+
+## Complexity Analysis
+
+| Metric | Value |
+|--------|-------|
+| **Cycle time** | `O(v + n)` |
+| **Space usage** | `O(m)` |
+| **Queue operations** | `O(1)` |
+| **Priority evaluation** | `O(1)` |
+
+*Where: v = vehicles served, n = file entries, m = total vehicles*
+
+---
+
+## Design Highlights
+
+- ✓ **Dual-threshold** hysteresis (10/5) stabilizes mode transitions
+- ✓ **Averaging formula** ensures equitable lane service
+- ✓ **Mutual exclusion** prevents race conditions
+- ✓ **Single-green** policy eliminates deadlock potential
+- ✓ **Constant-time** queue primitives
+
+> **Key Insight:** The threshold separation proves essential—without the gap between activation and deactivation points, the system would experience unstable behavior when AL2 fluctuates near a single boundary value.
 
 ## Traffic Operation management Functions
 
@@ -78,6 +174,3 @@ The functions used in the program are categorized into 3 main parts.
 -   Assignment: COMP202 DSA Queue Simulator
 -   SDL Documentation:  [https://wiki.libsdl.org/SDL2/FrontPage](https://wiki.libsdl.org/SDL2/FrontPage)
 -   C Programming: Kernighan & Ritchie
--   GitHub Repository:  [https://github.com/sujan0629/dsa-queue-simulator](https://github.com/sujan0629/dsa-queue-simulator)
-
-

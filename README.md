@@ -2,6 +2,73 @@
 
 Developed a real time traffic analyzing system where a simulation of traffic at a junction is visualized with graphics so that the traffic can be managed from the system we developed and this simulation is also an example to show that it can be applicable in the real life world. In the following program i developed 2 main programs called **simulator.c** and **traffic_generator.c** where simulator.c is the logic to manage the data and has the graphics libraries in it and traffic_generator.c is the program that generates the traffic data like vehicle number plate,road and lane and stores the data into vehicle.data and that file is used by simulator.c to simulate the traffic into the traffic junction. Here, I used the concept of queue and priority queue for the management of traffic system and **sdl2 libraries** for the graphical feature to my program. The vehicle logics that I used in this program is, theres this lane called **AL2** where, if the vehicles number exceed than 10 in that lane then, all other lane which is being served will be halted and the AL2 lane will be prioritized to serve its vehicle first, implementing the concept of priority queue in it. When the vehicle number is below 10 in the lane AL2 then all the **4 lanes** are served as normal lanes and the cycle of traffic light goes in a normal way. Vehicles are served based on the average number of vehicles waiting in normal lanes. To calculate the estimated time of green light in a lane will be the product of number of vehicles in the lane and the estimated time to serve one vehicle.
 
+## How to run
+
+Here is the steps to run the Traffic Simulator on **Arch Linux** and **Windows**.
+
+## 🐧 Arch Linux
+
+### 1. Install Dependencies
+in terminal install (GCC, Make, SDL2, SDL2_ttf):
+```bash
+sudo pacman -S gcc make sdl2 sdl2_ttf
+```
+
+### 2. Compile the Project
+Navigate to the project directory and run:
+```bash
+make
+```
+This will create two executables: `simulator` and `traffic_generator`.
+
+### 3. Run the Simulation
+We need to run two programs that is simulator and traffic_generator so open two terminals and enter the following command:
+
+**Method A (Two terminals):**
+Terminal 1:
+```bash
+./traffic_generator
+```
+Terminal 2:
+```bash
+./simulator
+```
+
+---
+
+## 🪟 Windows (via MSYS2)
+
+Lets install **MSYS2** to compile our c file.
+
+### 1. Install MSYS2
+Very simple step enter the following command in your windows terminal :
+`winget install msys2`
+### 2. Install Dependencies
+In the MSYS2 UCRT64 terminal, run:
+```bash
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-sdl2 mingw-w64-ucrt-x86_64-sdl2_ttf
+```
+
+### 3. Setup Font file
+Windows doesn't have the standard Linux font paths.
+1. Download `DejaVuSans.ttf` (or any `.ttf` file you want to use).
+2. Rename it to `DejaVuSans.ttf`.
+3. Place it in the **same folder** as your `simulator.c` and `Makefile`.
+
+### 4. Compile
+Navigate to your project folder
+```bash
+make
+```
+
+### 5. Run
+```bash
+./traffic_generator.exe &
+./simulator.exe
+```
+
+---
+
 
 # List of the Functions used in this program
 
@@ -47,7 +114,7 @@ The functions used in the program are categorized into 3 main parts.
 
 ### 1. Vehicle Generation & File Communication
 
-Random vehicle IDs (format: `AA0AA000`) generate alongside lane assignments (A/B/C/D) at 1-second intervals. Data persists to `vehicles.data` as `VEHICLEID:LANE`. A reader thread monitors this file every 2 seconds, extracting entries into respective lane queues.
+Random vehicle IDs will generate alongside lane assignments (A/B/C/D) at 1-second intervals. Data will persist to `vehicles.data` as `VEHICLEID:LANE`. A reader thread will monitor this file every 2 seconds, checking the entries of vehicles in the lane queue.
 
 > **Performance:** `O(1)` generation, `O(n)` parsing
 
@@ -68,8 +135,8 @@ Four independent queues exist. Operations execute in `O(1)` time with `O(m)` tot
 
 `AL2` receives preferential treatment via threshold logic:
 ```
-AL2 > 10  → activate priority
-AL2 ≥ 5   → maintain priority
+AL2 > 10  → activates the priority
+AL2 ≥ 5   → maintains then priority
 AL2 < 5   → revert to normal
 ```
 
@@ -92,10 +159,9 @@ A → green | serve AL2 until < 5 | duration = count × unit_time
 
 #### Standard Path:
 ```
-B → C → D rotation | serve average vehicles | fair distribution
-```
+B → C → D rotation | serves average vehicles and there will be fair distribution of vehicles
 
-Transitions include **1-second all-red safety buffer**. 
+```
 
 **Complexity:** `O(v)`
 
@@ -110,38 +176,6 @@ Transitions include **1-second all-red safety buffer**.
 | **Processor** | Vehicle management → signal control |
 | **Graphics** | Visual rendering (30 FPS) |
 
-**Mutex locks** ensure thread-safe access to shared resources. 
-
-**Overhead:** `O(1)`
-
----
-
-## Complexity Analysis
-
-| Metric | Value |
-|--------|-------|
-| **Cycle time** | `O(v + n)` |
-| **Space usage** | `O(m)` |
-| **Queue operations** | `O(1)` |
-| **Priority evaluation** | `O(1)` |
-
-*Where: v = vehicles served, n = file entries, m = total vehicles*
-
----
-
-## Design Highlights
-
-- ✓ **Dual-threshold** hysteresis (10/5) stabilizes mode transitions
-- ✓ **Averaging formula** ensures equitable lane service
-- ✓ **Mutual exclusion** prevents race conditions
-- ✓ **Single-green** policy eliminates deadlock potential
-- ✓ **Constant-time** queue primitives
-
-> **Key Insight:** The threshold separation proves essential—without the gap between activation and deactivation points, the system would experience unstable behavior when AL2 fluctuates near a single boundary value.
-
-## Traffic Operation management Functions
-
-  
 
 **checkQueue()** - This is where the main traffic logic stays on
 
